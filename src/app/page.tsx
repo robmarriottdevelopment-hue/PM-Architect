@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import StructuralAssistant from '@/modules/intelligence/StructuralAssistant';
 import TaskEditor from '@/modules/timeline/TaskEditor';
 import StructuralHealth from '@/components/StructuralHealth';
+import ChangeControlModule from '@/modules/change/ChangeControlModule';
 
 // Dynamically import Gantt to avoid SSR issues
 const GanttCanvas = dynamic(() => import('@/modules/timeline/GanttCanvas'), { ssr: false });
@@ -217,7 +218,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto" key={activeModule}>
               {activeModule === 'WBS' && (
                 <div className="space-y-1">
                   {items.map((item) => (
@@ -253,7 +254,12 @@ export default function Home() {
                   ))}
                 </div>
               )}
-              {(activeModule === 'CBS' || activeModule === 'CHANGE') && (
+              {activeModule === 'CHANGE' && (
+                <div className="h-full flex flex-col">
+                  <ChangeControlModule />
+                </div>
+              )}
+              {activeModule === 'CBS' && (
                 <div className="py-12 text-center">
                   <p className="text-xs text-slate-300 italic uppercase tracking-widest font-bold">Coming Soon</p>
                 </div>

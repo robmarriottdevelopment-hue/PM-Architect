@@ -25,6 +25,8 @@ interface ProjectState {
     // Risk & Change Actions
     addRisk: (risk: Omit<Risk, 'id' | 'project_id'>) => void;
     addChange: (change: Omit<Change, 'id' | 'project_id'>) => void;
+    updateChange: (id: string, updates: Partial<Change>) => void;
+    deleteChange: (id: string) => void;
 
     // Deliverable Actions
     addDeliverable: (deliverable: Omit<Deliverable, 'id' | 'project_id'>) => void;
@@ -285,6 +287,12 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
     addChange: (change) => set((state) => ({
         changes: [...state.changes, { ...change, id: crypto.randomUUID(), project_id: state.project?.id || '' }]
+    })),
+    updateChange: (id, updates) => set((state) => ({
+        changes: state.changes.map(ch => ch.id === id ? { ...ch, ...updates } : ch)
+    })),
+    deleteChange: (id) => set((state) => ({
+        changes: state.changes.filter(ch => ch.id !== id)
     })),
 
     addDeliverable: (deliverable) => set((state) => ({

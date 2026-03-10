@@ -89,12 +89,21 @@ export default function StructuralAssistant() {
                             {issue.message}
                         </p>
                         {issue.action && (
-                            <button className={cn(
-                                "mt-2 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:underline",
-                                issue.type === 'error' && "text-red-600",
-                                issue.type === 'warning' && "text-amber-600",
-                                issue.type === 'info' && "text-blue-600"
-                            )}>
+                            <button
+                                onClick={() => {
+                                    if (issue.action === 'Add Structure' || issue.action === 'Enable Structure') {
+                                        useProjectStore.getState().upgradeToStructured();
+                                    } else if (issue.action === 'Link Tasks') {
+                                        useProjectStore.getState().updateProject({ active_view: 'ARCHITECTURE' });
+                                    }
+                                }}
+                                className={cn(
+                                    "mt-2 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:underline text-left",
+                                    issue.type === 'error' && "text-red-600",
+                                    issue.type === 'warning' && "text-amber-600",
+                                    issue.type === 'info' && "text-blue-600"
+                                )}
+                            >
                                 {issue.action} <ArrowUpRight className="w-3 h-3" />
                             </button>
                         )}

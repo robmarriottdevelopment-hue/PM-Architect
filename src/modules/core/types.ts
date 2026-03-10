@@ -59,9 +59,14 @@ export interface Change {
   project_id: string;
   title: string;
   description: string;
+  requested_by: string;
   request_date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   impact_assessment?: string;
+  time_impact: number;    // 1-5
+  cost_impact: number;    // 1-5
+  risk_impact: number;    // 1-5
+  quality_impact: number; // 1-5
 }
 
 export interface Dependency {
