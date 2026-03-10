@@ -175,8 +175,8 @@ export default function ChangeControlModule() {
                         </div>
 
                         <ImpactVisual
-                            time={selectedChange.time_impact}
-                            cost={selectedChange.cost_impact}
+                            addedDuration={selectedChange.added_duration}
+                            addedCost={selectedChange.added_cost}
                             risk={selectedChange.risk_impact}
                             quality={selectedChange.quality_impact}
                             title={selectedChange.title}

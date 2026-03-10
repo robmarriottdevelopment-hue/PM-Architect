@@ -1,25 +1,54 @@
 'use client';
 
 import React from 'react';
-import { Share2, Copy, Check } from 'lucide-react';
+import { Share2, Copy, Check, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/modules/core/store';
 
 interface ImpactVisualProps {
-    time: number;
-    cost: number;
+    addedDuration: number;
+    addedCost: number;
     risk: number;
     quality: number;
     title?: string;
 }
 
-export default function ImpactVisual({ time, cost, risk, quality, title }: ImpactVisualProps) {
+export default function ImpactVisual({ addedDuration, addedCost, risk, quality, title }: ImpactVisualProps) {
+    const { items } = useProjectStore();
     const [copied, setCopied] = React.useState(false);
     const [sent, setSent] = React.useState(false);
+
+    // Calculate project totals for normalization
+    const totalDuration = items.reduce((sum, item) => sum + (item.is_summary ? 0 : item.duration), 0) || 1;
+    const totalCost = items.reduce((sum, item) => sum + (item.cost_estimate || 0), 0) || 1;
+
+    // Normalization logic: 
+    // We want to map the % increase to a 1-5 scale for the radar chart.
+    // 0% = 1
+    // 5% = 2
+    // 10% = 3
+    // 15% = 4
+    // 20%+ = 5
+    const normalize = (added: number, total: number) => {
+        const percentage = (added / total) * 100;
+        if (percentage <= 0) return 1;
+        if (percentage <= 5) return 2;
+        if (percentage <= 10) return 3;
+        if (percentage <= 15) return 4;
+        return 5;
+    };
+
+    const timeScore = normalize(addedDuration, totalDuration);
+    const costScore = normalize(addedCost, totalCost);
 
     const formatImpact = (val: number) => `${val}/5`;
 
     const handleCopy = () => {
-        const text = `Change Request Impact Assessment: ${title || 'Untitled'}\nTime: ${formatImpact(time)}\nCost: ${formatImpact(cost)}\nRisk: ${formatImpact(risk)}\nQuality: ${formatImpact(quality)}`;
+        const text = `Change Request Impact Assessment: ${title || 'Untitled'}\n` +
+            `Time Impact: +${addedDuration} Days (Visual Score: ${timeScore}/5)\n` +
+            `Cost Impact: +£${addedCost.toLocaleString()} (Visual Score: ${costScore}/5)\n` +
+            `Risk Level: ${risk}/5\n` +
+            `Quality Risk: ${quality}/5`;
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -36,8 +65,8 @@ export default function ImpactVisual({ time, cost, risk, quality, title }: Impac
     const radius = size * 0.4;
 
     const points = [
-        { label: 'Time', val: time },
-        { label: 'Cost', val: cost },
+        { label: 'Time', val: timeScore },
+        { label: 'Cost', val: costScore },
         { label: 'Risk', val: risk },
         { label: 'Quality', val: quality },
     ];
@@ -61,8 +90,8 @@ export default function ImpactVisual({ time, cost, risk, quality, title }: Impac
     return (
         <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm flex flex-col items-center">
             <div className="mb-6 text-center">
-                <h3 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Impact Assessment</h3>
-                <p className="text-sm font-bold text-slate-900">Visual Deviation Profile</p>
+                <h3 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-1">Data-Driven Impact</h3>
+                <p className="text-sm font-bold text-slate-900">Relative Project Deviation</p>
             </div>
 
             <div className="relative w-[240px] h-[240px] flex items-center justify-center">
@@ -140,20 +169,35 @@ export default function ImpactVisual({ time, cost, risk, quality, title }: Impac
                 </svg>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 w-full mt-8">
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Time Impact</p>
-                    <p className="text-sm font-bold text-slate-900">{time}/5</p>
+            <div className="w-full mt-8 bg-blue-50/50 rounded-2xl p-4 border border-blue-100/50 mb-6">
+                <div className="flex items-start gap-3">
+                    <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-blue-700 font-medium leading-relaxed">
+                        Visual impact scores for Time and Cost are normalized against the current project totals of <b>{totalDuration} days</b> and <b>£{totalCost.toLocaleString()}</b>.
+                    </p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Cost Impact</p>
-                    <p className="text-sm font-bold text-slate-900">{cost}/5</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 w-full">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Schedule Impact</p>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-sm font-bold text-slate-900">+{addedDuration}</span>
+                        <span className="text-[9px] font-bold text-slate-400">Days</span>
+                    </div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Risk Level</p>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Financial Delta</p>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-[9px] font-bold text-slate-400">£</span>
+                        <span className="text-sm font-bold text-slate-900">{addedCost.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Risk Intensity</p>
                     <p className="text-sm font-bold text-slate-900">{risk}/5</p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Quality Risk</p>
                     <p className="text-sm font-bold text-slate-900">{quality}/5</p>
                 </div>
@@ -172,7 +216,7 @@ export default function ImpactVisual({ time, cost, risk, quality, title }: Impac
                     className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-lg active:scale-95"
                 >
                     {sent ? <Check className="w-4 h-4 text-green-400" /> : <Share2 className="w-4 h-4" />}
-                    {sent ? 'Sent Successfully' : 'Send to Stakeholder'}
+                    {sent ? 'Sent Successfully' : 'Send Assessment'}
                 </button>
             </div>
         </div>

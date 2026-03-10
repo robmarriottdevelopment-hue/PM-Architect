@@ -215,8 +215,8 @@ export const STRUCTURED_DEMO: {
             requested_by: 'Sarah Jenkins (Ops Director)',
             request_date: '2026-03-08',
             status: 'Pending',
-            time_impact: 4,
-            cost_impact: 3,
+            added_duration: 12,
+            added_cost: 45000,
             risk_impact: 4,
             quality_impact: 2,
         }

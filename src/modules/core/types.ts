@@ -63,8 +63,8 @@ export interface Change {
   request_date: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   impact_assessment?: string;
-  time_impact: number;    // 1-5
-  cost_impact: number;    // 1-5
+  added_duration: number; // in days
+  added_cost: number;     // in currency
   risk_impact: number;    // 1-5
   quality_impact: number; // 1-5
 }

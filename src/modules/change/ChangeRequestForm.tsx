@@ -3,6 +3,7 @@
 import React from 'react';
 import { X, Save, User, Calendar, FileText, BarChart3 } from 'lucide-react';
 import { Change } from '@/modules/core/types';
+import { useProjectStore } from '@/modules/core/store';
 
 interface ChangeRequestFormProps {
     onSave: (change: Omit<Change, 'id' | 'project_id'>) => void;
@@ -10,12 +11,18 @@ interface ChangeRequestFormProps {
 }
 
 export default function ChangeRequestForm({ onSave, onClose }: ChangeRequestFormProps) {
+    const { items } = useProjectStore();
+
+    // Calculate defaults or suggestions
+    const totalCurrentCost = items.reduce((sum, item) => sum + (item.cost_estimate || 0), 0);
+    const totalCurrentDuration = items.reduce((sum, item) => sum + (item.duration || 0), 0);
+
     const [formData, setFormData] = React.useState({
         title: '',
         description: '',
         requested_by: '',
-        time_impact: 3,
-        cost_impact: 3,
+        added_duration: 0,
+        added_cost: 0,
         risk_impact: 3,
         quality_impact: 3,
     });
@@ -30,16 +37,16 @@ export default function ChangeRequestForm({ onSave, onClose }: ChangeRequestForm
         onClose();
     };
 
-    const ImpactSlider = ({ label, value, field }: { label: string, value: number, field: string }) => (
+    const ImpactSlider = ({ label, value, field, max = 5 }: { label: string, value: number, field: string, max?: number }) => (
         <div className="space-y-2">
             <div className="flex justify-between items-center">
                 <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">{label}</label>
-                <span className="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md">{value}/5</span>
+                <span className="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md">{value}/{max}</span>
             </div>
             <input
                 type="range"
                 min="1"
-                max="5"
+                max={max}
                 step="1"
                 value={value}
                 onChange={(e) => setFormData(prev => ({ ...prev, [field]: parseInt(e.target.value) }))}
@@ -53,7 +60,7 @@ export default function ChangeRequestForm({ onSave, onClose }: ChangeRequestForm
             <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">Record Change Request</h2>
-                    <p className="text-xs text-slate-500 mt-1">Capture stakeholder scope adjustments and initial impact.</p>
+                    <p className="text-xs text-slate-500 mt-1">Capture stakeholder scope adjustments with exact impact data.</p>
                 </div>
                 <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 transition-colors">
                     <X className="w-5 h-5" />
@@ -106,16 +113,42 @@ export default function ChangeRequestForm({ onSave, onClose }: ChangeRequestForm
                     </div>
                 </div>
 
-                {/* Impact Visual Section */}
+                {/* Impact Data Section */}
                 <div className="pt-6 border-t border-slate-100">
                     <div className="flex items-center gap-2 mb-6">
                         <BarChart3 className="w-4 h-4 text-blue-500" />
-                        <h3 className="text-xs font-bold text-slate-900">Impact Estimates</h3>
+                        <h3 className="text-xs font-bold text-slate-900">Exact Data Impact</h3>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                        <ImpactSlider label="Time Impact" value={formData.time_impact} field="time_impact" />
-                        <ImpactSlider label="Cost Impact" value={formData.cost_impact} field="cost_impact" />
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Additional Duration</label>
+                                <span className="text-[10px] font-bold text-slate-400">DAYS</span>
+                            </div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={formData.added_duration}
+                                onChange={(e) => setFormData(prev => ({ ...prev, added_duration: parseFloat(e.target.value) || 0 }))}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Additional Cost</label>
+                                <span className="text-[10px] font-bold text-slate-400">GBP (£)</span>
+                            </div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={formData.added_cost}
+                                onChange={(e) => setFormData(prev => ({ ...prev, added_cost: parseFloat(e.target.value) || 0 }))}
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                            />
+                        </div>
+
                         <ImpactSlider label="Risk Level" value={formData.risk_impact} field="risk_impact" />
                         <ImpactSlider label="Quality Risk" value={formData.quality_impact} field="quality_impact" />
                     </div>
