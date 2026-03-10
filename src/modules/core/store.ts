@@ -154,7 +154,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
                 items: SchedulingEngine.calculate(STRUCTURED_DEMO.items, STRUCTURED_DEMO.dependencies),
                 dependencies: STRUCTURED_DEMO.dependencies,
                 risks: STRUCTURED_DEMO.risks,
-                changes: [],
+                changes: STRUCTURED_DEMO.changes,
                 deliverables: STRUCTURED_DEMO.deliverables,
                 isDemoMode: true,
             });

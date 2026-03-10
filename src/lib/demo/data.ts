@@ -1,4 +1,4 @@
-import { Project, WorkItem, Dependency, Deliverable, Risk } from '@/modules/core/types';
+import { Project, WorkItem, Dependency, Deliverable, Risk, Change } from '@/modules/core/types';
 
 export const LIGHTWEIGHT_DEMO: { project: Project; items: WorkItem[]; dependencies: Dependency[] } = {
     // ... existing LIGHTWEIGHT_DEMO remains unchanged
@@ -63,6 +63,7 @@ export const STRUCTURED_DEMO: {
     items: WorkItem[];
     dependencies: Dependency[];
     risks: Risk[];
+    changes: Change[];
 } = {
     project: {
         id: 'demo-structured',
@@ -203,6 +204,21 @@ export const STRUCTURED_DEMO: {
             probability: 0.2,
             mitigation: 'Engage regulatory consultant for pre-review.',
             status: 'Open'
+        }
+    ],
+    changes: [
+        {
+            id: 'change-1',
+            project_id: 'demo-structured',
+            title: '4G/5G Fail-safe Integration',
+            description: 'Requested addition of a cellular backup communication module for beyond-visual-line-of-sight (BVLOS) redundancy.',
+            requested_by: 'Sarah Jenkins (Ops Director)',
+            request_date: '2026-03-08',
+            status: 'Pending',
+            time_impact: 4,
+            cost_impact: 3,
+            risk_impact: 4,
+            quality_impact: 2,
         }
     ]
 };
