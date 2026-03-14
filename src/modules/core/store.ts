@@ -32,9 +32,17 @@ interface ProjectState {
     addDeliverable: (deliverable: Omit<Deliverable, 'id' | 'project_id'>) => void;
     updateDeliverable: (id: string, updates: Partial<Deliverable>) => void;
     deleteDeliverable: (id: string, cascadeOption: 'DELETE' | 'UNLINK') => void;
+    moveDeliverable: (id: string, newParentId: string | null) => void;
     generateWBSFromPBS: () => void;
     upgradeToStructured: () => void;
 }
+
+const safeUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
 
 export const useProjectStore = create<ProjectState>((set) => ({
     project: null,
@@ -46,7 +54,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     isDemoMode: false,
 
     initProject: (mode, onboardScore) => {
-        const projectId = crypto.randomUUID();
+        const projectId = safeUUID();
         const project: Project = {
             id: projectId,
             name: 'New Project',
@@ -64,7 +72,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
         if (mode === 'STRUCTURED') {
             const today = new Date().toISOString().split('T')[0];
-            const primaryDeliverableId = crypto.randomUUID();
+            const primaryDeliverableId = safeUUID();
 
             initialDeliverables = [
                 {
@@ -77,7 +85,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
                     status: 'Draft',
                 },
                 {
-                    id: crypto.randomUUID(),
+                    id: safeUUID(),
                     project_id: projectId,
                     parent_id: primaryDeliverableId,
                     title: 'Child Component A',
@@ -86,7 +94,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
                     status: 'Draft',
                 },
                 {
-                    id: crypto.randomUUID(),
+                    id: safeUUID(),
                     project_id: projectId,
                     parent_id: primaryDeliverableId,
                     title: 'Child Component B',
@@ -98,7 +106,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
             initialItems = [
                 {
-                    id: crypto.randomUUID(),
+                    id: safeUUID(),
                     project_id: projectId,
                     parent_id: null,
                     title: 'Workstream 1',
@@ -114,7 +122,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
             initialRisks = [
                 {
-                    id: crypto.randomUUID(),
+                    id: safeUUID(),
                     project_id: projectId,
                     title: 'Initial Scoping Risk',
                     description: 'Uncertainty around high-level technical requirements.',
@@ -140,9 +148,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
     loadDemo: (type) => {
         if (type === 'LIGHTWEIGHT') {
             set({
-                project: LIGHTWEIGHT_DEMO.project,
-                items: LIGHTWEIGHT_DEMO.items,
-                dependencies: LIGHTWEIGHT_DEMO.dependencies,
+                project: { ...LIGHTWEIGHT_DEMO.project },
+                items: SchedulingEngine.calculate([...LIGHTWEIGHT_DEMO.items], [...LIGHTWEIGHT_DEMO.dependencies]),
+                dependencies: [...LIGHTWEIGHT_DEMO.dependencies],
                 risks: [],
                 changes: [],
                 deliverables: [],
@@ -150,12 +158,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
             });
         } else {
             set({
-                project: STRUCTURED_DEMO.project,
+                project: { ...STRUCTURED_DEMO.project },
                 items: SchedulingEngine.calculate(STRUCTURED_DEMO.items, STRUCTURED_DEMO.dependencies),
-                dependencies: STRUCTURED_DEMO.dependencies,
+                dependencies: [...STRUCTURED_DEMO.dependencies],
                 risks: STRUCTURED_DEMO.risks,
                 changes: STRUCTURED_DEMO.changes,
-                deliverables: STRUCTURED_DEMO.deliverables,
+                deliverables: calculateDeliverableProgress(
+                    SchedulingEngine.calculate(STRUCTURED_DEMO.items, STRUCTURED_DEMO.dependencies),
+                    STRUCTURED_DEMO.deliverables
+                ),
                 isDemoMode: true,
             });
         }
@@ -167,12 +178,16 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
     addWorkItem: (item) => set((state) => {
         const newItem: WorkItem = {
-            id: crypto.randomUUID(),
+            id: safeUUID(),
             project_id: state.project?.id || 'unknown',
             ...item,
+            deliverable_id: item.deliverable_id || null,
         };
         const newItems = SchedulingEngine.calculate([...state.items, newItem], state.dependencies);
-        return { items: newItems };
+        return { 
+            items: newItems,
+            deliverables: calculateDeliverableProgress(newItems, state.deliverables || [])
+        };
     }),
 
     updateWorkItem: (id, updates) => set((state) => {
@@ -214,26 +229,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
         const rolledUpItems = calculateRollups(scheduledItems);
 
-        // 3. Update Deliverable progress (Auto mode)
-        const updateDeliverables = (items: WorkItem[], deliverables: Deliverable[]): Deliverable[] => {
-            return deliverables.map(del => {
-                if (del.progress_source !== 'AUTO') return del;
-
-                const linkedWork = items.filter(it => it.deliverable_id === del.id && !it.is_summary);
-                if (linkedWork.length === 0) return del;
-
-                const totalDuration = linkedWork.reduce((sum, it) => sum + it.duration, 0);
-                const weightedProgress = totalDuration > 0
-                    ? Math.round(linkedWork.reduce((sum, it) => sum + (it.progress * it.duration), 0) / totalDuration)
-                    : 0;
-
-                return { ...del, progress: weightedProgress };
-            });
-        };
-
         return {
             items: rolledUpItems,
-            deliverables: updateDeliverables(rolledUpItems, state.deliverables)
+            deliverables: calculateDeliverableProgress(rolledUpItems, state.deliverables)
         };
     }),
 
@@ -241,23 +239,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
         const remainingItems = state.items.filter(it => it.id !== id);
         const scheduledItems = SchedulingEngine.calculate(remainingItems, state.dependencies);
 
-        // Also update deliverables if they were linked to this deleted item
-        const updateDeliverables = (items: WorkItem[], deliverables: Deliverable[]): Deliverable[] => {
-            return deliverables.map(del => {
-                if (del.progress_source !== 'AUTO') return del;
-                const linkedWork = items.filter(it => it.deliverable_id === del.id && !it.is_summary);
-                if (linkedWork.length === 0) return { ...del, progress: 0 };
-                const totalDuration = linkedWork.reduce((sum, it) => sum + it.duration, 0);
-                const weightedProgress = totalDuration > 0
-                    ? Math.round(linkedWork.reduce((sum, it) => sum + (it.progress * it.duration), 0) / totalDuration)
-                    : 0;
-                return { ...del, progress: weightedProgress };
-            });
-        };
-
         return {
             items: scheduledItems,
-            deliverables: updateDeliverables(scheduledItems, state.deliverables)
+            deliverables: calculateDeliverableProgress(scheduledItems, state.deliverables)
         };
     }),
 
@@ -265,7 +249,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         const newDeps = [
             ...state.dependencies,
             {
-                id: crypto.randomUUID(),
+                id: safeUUID(),
                 predecessor_id: preId,
                 successor_id: sucId,
                 type: 'FS' as const
@@ -282,11 +266,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }),
 
     addRisk: (risk) => set((state) => ({
-        risks: [...state.risks, { ...risk, id: crypto.randomUUID(), project_id: state.project?.id || '' }]
+        risks: [...state.risks, { ...risk, id: safeUUID(), project_id: state.project?.id || '' }]
     })),
 
     addChange: (change) => set((state) => ({
-        changes: [...state.changes, { ...change, id: crypto.randomUUID(), project_id: state.project?.id || '' }]
+        changes: [...state.changes, { ...change, id: safeUUID(), project_id: state.project?.id || '' }]
     })),
     updateChange: (id, updates) => set((state) => ({
         changes: state.changes.map(ch => ch.id === id ? { ...ch, ...updates } : ch)
@@ -296,7 +280,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     })),
 
     addDeliverable: (deliverable) => set((state) => ({
-        deliverables: [...state.deliverables, { ...deliverable, id: crypto.randomUUID(), project_id: state.project?.id || '', status: 'Draft' }]
+        deliverables: [...state.deliverables, { ...deliverable, id: safeUUID(), project_id: state.project?.id || '', status: 'Draft' }]
     })),
 
     updateDeliverable: (id, updates) => set((state) => {
@@ -325,11 +309,31 @@ export const useProjectStore = create<ProjectState>((set) => ({
         return { deliverables: newDeliverables, items: scheduledItems };
     }),
 
+    moveDeliverable: (id, newParentId) => set((state) => {
+        // Prevent circular nesting
+        const isDescendant = (parentId: string | null, targetId: string): boolean => {
+            if (!parentId) return false;
+            if (parentId === targetId) return true;
+            const parent = state.deliverables.find(d => d.id === parentId);
+            return isDescendant(parent?.parent_id || null, targetId);
+        };
+
+        if (newParentId && isDescendant(newParentId, id)) {
+            return { deliverables: state.deliverables }; // Return something valid to satisfy Partial<State>
+        }
+
+        const newDeliverables = state.deliverables.map(del =>
+            del.id === id ? { ...del, parent_id: newParentId } : del
+        );
+
+        return { deliverables: newDeliverables };
+    }),
+
     generateWBSFromPBS: () => set((state) => {
         if (!state.project) return {};
 
         const newWorkItems: WorkItem[] = state.deliverables.map((del, index) => ({
-            id: crypto.randomUUID(),
+            id: safeUUID(),
             project_id: state.project!.id,
             parent_id: null,
             title: del.title,
@@ -352,10 +356,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
         if (!state.project) return {};
 
         const projectId = state.project.id;
-        const primaryDeliverableId = crypto.randomUUID();
+        const primaryDeliverableId = safeUUID();
 
         // 1. Scaffold initial PBS if empty
-        let newDeliverables = [...state.deliverables];
+        let newDeliverables = [...(state.deliverables || [])];
         if (newDeliverables.length === 0) {
             newDeliverables = [
                 {
@@ -387,3 +391,22 @@ export const useProjectStore = create<ProjectState>((set) => ({
         };
     })
 }));
+
+// --- Pure Helper Functions (outside store for reuse) ---
+
+const calculateDeliverableProgress = (items: WorkItem[], deliverables: Deliverable[]): Deliverable[] => {
+    if (!deliverables) return [];
+    return deliverables.map(del => {
+        if (del.progress_source !== 'AUTO') return del;
+
+        const linkedWork = (items || []).filter(it => it && it.deliverable_id === del.id && !it.is_summary);
+        if (linkedWork.length === 0) return { ...del, progress: 0 };
+
+        const totalDuration = linkedWork.reduce((sum, it) => sum + (it.duration || 1), 0);
+        const weightedProgress = totalDuration > 0
+            ? Math.round(linkedWork.reduce((sum, it) => sum + ((it ? it.progress || 0 : 0) * (it ? it.duration || 1 : 1)), 0) / totalDuration)
+            : 0;
+
+        return { ...del, progress: weightedProgress };
+    });
+};

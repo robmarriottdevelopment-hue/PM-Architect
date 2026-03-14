@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Plus, ChevronRight, MoreHorizontal, Target, Trash2, Edit3, Link2, Sparkles } from 'lucide-react';
 
 export default function PBSModule() {
-    const { project, updateProject, deliverables, addDeliverable, updateDeliverable, deleteDeliverable, items } = useProjectStore();
+    const { project, updateProject, deliverables, addDeliverable, updateDeliverable, deleteDeliverable, items, moveDeliverable } = useProjectStore();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deleteModal, setDeleteModal] = useState<{ id: string, title: string } | null>(null);
 
@@ -22,7 +22,7 @@ export default function PBSModule() {
     };
 
     const renderDeliverable = (del: Deliverable, depth: number = 0) => {
-        const children = deliverables.filter(d => d.parent_id === del.id);
+        const children = (deliverables || []).filter(d => d.parent_id === del.id);
         const linkedWorkCount = items.filter(it => it.deliverable_id === del.id).length;
 
         return (
@@ -32,14 +32,41 @@ export default function PBSModule() {
                         "group flex items-center justify-between p-4 rounded-2xl border transition-all mb-2 cursor-pointer",
                         project?.selected_deliverable_id === del.id
                             ? "bg-blue-50 border-blue-200 shadow-md shadow-blue-100/50"
-                            : "bg-white border-slate-100 hover:border-slate-200"
+                            : "bg-white border-slate-100 hover:border-slate-200",
+                        "draggable"
                     )}
+                    draggable
+                    onDragStart={(e) => {
+                        e.dataTransfer.setData('deliverableId', del.id);
+                        e.currentTarget.style.opacity = '0.5';
+                    }}
+                    onDragEnd={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                    }}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.add('bg-blue-50/50', 'border-blue-300');
+                    }}
+                    onDragLeave={(e) => {
+                        e.currentTarget.classList.remove('bg-blue-50/50', 'border-blue-300');
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove('bg-blue-50/50', 'border-blue-300');
+                        const draggedId = e.dataTransfer.getData('deliverableId');
+                        if (draggedId !== del.id) {
+                            moveDeliverable(draggedId, del.id);
+                        }
+                    }}
                     onClick={() => updateProject({ selected_deliverable_id: del.id })}
                     style={{ marginLeft: `${depth * 24}px` }}
                 >
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                            <Target className="w-4 h-4 text-blue-500" />
+                        <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+                            depth === 0 ? "bg-slate-900 text-white" : "bg-blue-50 text-blue-500"
+                        )}>
+                            <Target className="w-4 h-4" />
                         </div>
 
                         {editingId === del.id ? (
@@ -53,7 +80,12 @@ export default function PBSModule() {
                             />
                         ) : (
                             <div className="flex-1 min-w-0">
-                                <span className="text-sm font-semibold text-slate-900 block truncate">{del.title}</span>
+                                <span className="text-sm font-semibold text-slate-900 block truncate">
+                                    {del.title}
+                                    {depth === 0 && (
+                                        <span className="ml-2 px-1.5 py-0.5 bg-slate-900 text-white text-[8px] font-black uppercase tracking-widest rounded">Product</span>
+                                    )}
+                                </span>
                                 <div className="flex items-center gap-3 mt-0.5">
                                     <button
                                         onClick={() => updateDeliverable(del.id, { progress_source: del.progress_source === 'AUTO' ? 'MANUAL' : 'AUTO' })}
@@ -145,12 +177,12 @@ export default function PBSModule() {
                     </div>
                 )}
 
-                {children.map(child => renderDeliverable(child, depth + 1))}
+                {(children || []).map(child => renderDeliverable(child, depth + 1))}
             </div>
         );
     };
 
-    const rootDeliverables = deliverables.filter(d => d.parent_id === null);
+    const rootDeliverables = (deliverables || []).filter(d => d.parent_id === null);
 
     return (
         <div className="max-w-3xl">
@@ -174,7 +206,24 @@ export default function PBSModule() {
                         <p className="text-sm text-slate-400 italic font-medium">No deliverables defined yet.</p>
                     </div>
                 ) : (
-                    rootDeliverables.map(del => renderDeliverable(del))
+                    <div
+                        onDragOver={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.add('bg-slate-50');
+                        }}
+                        onDragLeave={(e) => {
+                            e.currentTarget.classList.remove('bg-slate-50');
+                        }}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.classList.remove('bg-slate-50');
+                            const draggedId = e.dataTransfer.getData('deliverableId');
+                            moveDeliverable(draggedId, null);
+                        }}
+                        className="space-y-2 min-h-[50px] rounded-3xl transition-colors"
+                    >
+                        {rootDeliverables.map(del => renderDeliverable(del))}
+                    </div>
                 )}
             </div>
 

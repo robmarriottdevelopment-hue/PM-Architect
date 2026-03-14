@@ -29,6 +29,19 @@ export class SchedulingEngine {
         return Array.from(taskMap.values());
     }
 
+    private static safeDate(val: any): Date {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? new Date() : d;
+    }
+
+    private static safeISO(date: Date): string {
+        try {
+            return date.toISOString().split('T')[0];
+        } catch {
+            return new Date().toISOString().split('T')[0];
+        }
+    }
+
     private static runForwardPass(taskMap: Map<string, WorkItem>, dependencies: Dependency[]) {
         const visited = new Set<string>();
         const processing = new Set<string>();
@@ -42,22 +55,23 @@ export class SchedulingEngine {
             const task = taskMap.get(taskId)!;
             const predecessors = dependencies.filter(d => d.successor_id === taskId);
 
-            let earliestStart = new Date(task.start_date).getTime();
+            let earliestStart = this.safeDate(task.start_date).getTime();
 
             for (const dep of predecessors) {
+                if (!taskMap.has(dep.predecessor_id)) continue;
                 calculateEF(dep.predecessor_id);
                 const pred = taskMap.get(dep.predecessor_id)!;
-                const predEF = new Date(pred.end_date).getTime();
+                const predEF = this.safeDate(pred.end_date).getTime();
                 if (predEF > earliestStart) {
                     earliestStart = predEF;
                 }
             }
 
             const start = new Date(earliestStart);
-            const end = new Date(earliestStart + (task.duration * 24 * 60 * 60 * 1000));
+            const end = new Date(earliestStart + ((task.duration || 1) * 24 * 60 * 60 * 1000));
 
-            task.start_date = start.toISOString().split('T')[0];
-            task.end_date = end.toISOString().split('T')[0];
+            task.start_date = this.safeISO(start);
+            task.end_date = this.safeISO(end);
 
             processing.delete(taskId);
             visited.add(taskId);
@@ -70,8 +84,11 @@ export class SchedulingEngine {
 
     private static runBackwardPass(taskMap: Map<string, WorkItem>, dependencies: Dependency[]) {
         // Project end date is the max EF of all tasks
-        const allEndDates = Array.from(taskMap.values()).map(t => new Date(t.end_date).getTime());
-        const projectFinish = Math.max(...allEndDates);
+        const allEndDates = Array.from(taskMap.values())
+            .map(t => this.safeDate(t.end_date).getTime())
+            .filter(t => !isNaN(t));
+        
+        const projectFinish = allEndDates.length > 0 ? Math.max(...allEndDates) : new Date().getTime();
 
         const visited = new Set<string>();
 
@@ -86,21 +103,24 @@ export class SchedulingEngine {
             if (successors.length > 0) {
                 let minSuccessorLS = Infinity;
                 for (const dep of successors) {
+                    if (!taskMap.has(dep.successor_id)) continue;
                     calculateLS(dep.successor_id);
                     const succ = taskMap.get(dep.successor_id)!;
-                    const succLS = new Date(succ.late_start || succ.start_date).getTime();
+                    const succLS = this.safeDate(succ.late_start || succ.start_date).getTime();
                     if (succLS < minSuccessorLS) {
                         minSuccessorLS = succLS;
                     }
                 }
-                latestFinish = minSuccessorLS;
+                if (minSuccessorLS !== Infinity) {
+                    latestFinish = minSuccessorLS;
+                }
             }
 
             const lateFinishDate = new Date(latestFinish);
-            const lateStartDate = new Date(latestFinish - (task.duration * 24 * 60 * 60 * 1000));
+            const lateStartDate = new Date(latestFinish - ((task.duration || 1) * 24 * 60 * 60 * 1000));
 
-            task.late_finish = lateFinishDate.toISOString().split('T')[0];
-            task.late_start = lateStartDate.toISOString().split('T')[0];
+            task.late_finish = this.safeISO(lateFinishDate);
+            task.late_start = this.safeISO(lateStartDate);
 
             visited.add(taskId);
         };
@@ -112,8 +132,14 @@ export class SchedulingEngine {
 
     private static calculateFloatAndCriticalPath(taskMap: Map<string, WorkItem>) {
         for (const task of taskMap.values()) {
-            const earlyStart = new Date(task.start_date).getTime();
-            const lateStart = new Date(task.late_start!).getTime();
+            const earlyStart = this.safeDate(task.start_date).getTime();
+            const lateStart = this.safeDate(task.late_start!).getTime();
+
+            if (isNaN(earlyStart) || isNaN(lateStart)) {
+                task.total_float = 0;
+                task.is_critical = false;
+                continue;
+            }
 
             const floatMs = lateStart - earlyStart;
             task.total_float = Math.round(floatMs / (24 * 60 * 60 * 1000));

@@ -79,20 +79,6 @@ export const STRUCTURED_DEMO: {
         { id: 'del-3', project_id: 'demo-structured', parent_id: null, title: 'Regulatory Certification', progress: 0, progress_source: 'AUTO', status: 'Draft' },
     ],
     items: [
-        // General Project Management (Unlinked)
-        {
-            id: 'item-gp-1',
-            project_id: 'demo-structured',
-            parent_id: null,
-            title: 'Project Initiation / Stakeholder Kickoff',
-            start_date: '2026-03-01',
-            end_date: '2026-03-03',
-            duration: 3,
-            progress: 100,
-            is_summary: false,
-            sort_order: 1,
-            deliverable_id: null,
-        },
         // Deliverable 1: Airframe
         {
             id: 'item-af-1',
@@ -176,8 +162,6 @@ export const STRUCTURED_DEMO: {
         },
     ],
     dependencies: [
-        { id: 'dep-1', predecessor_id: 'item-gp-1', successor_id: 'item-af-1', type: 'FS' },
-        { id: 'dep-2', predecessor_id: 'item-gp-1', successor_id: 'item-av-1', type: 'FS' },
         { id: 'dep-3', predecessor_id: 'item-af-2', successor_id: 'item-cert-1', type: 'FS' },
         { id: 'dep-4', predecessor_id: 'item-av-2', successor_id: 'item-cert-1', type: 'FS' },
         { id: 'dep-5', predecessor_id: 'item-cert-1', successor_id: 'item-cert-2', type: 'FS' },

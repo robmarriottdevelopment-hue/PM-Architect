@@ -202,7 +202,7 @@ export default function WBSModule() {
                     >
                         <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
                         {project?.selected_deliverable_id
-                            ? `Add Work to ${deliverables.find(d => d.id === project.selected_deliverable_id)?.title}`
+                            ? `Add Work to ${(deliverables || []).find(d => d.id === project.selected_deliverable_id)?.title || 'Deliverable'}`
                             : 'Add Work Package'
                         }
                     </button>
@@ -212,14 +212,17 @@ export default function WBSModule() {
             <div className="space-y-8">
                 {/* General Project Management Section */}
                 {items.filter(it => it.deliverable_id === null).length > 0 && (
-                    <div className="animate-fade-in">
+                    <div className="animate-fade-in group">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
                                 <Layers className="w-4 h-4 text-slate-500" />
                             </div>
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">General Project Management</h3>
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">General Project Management</h3>
+                                <p className="text-[10px] font-bold text-slate-300 uppercase">Non-Product Work</p>
+                            </div>
                         </div>
-                        <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm">
+                        <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm group-hover:border-slate-200 transition-all">
                             <div className="space-y-1">
                                 {items
                                     .filter(it => it.deliverable_id === null && !it.parent_id)
@@ -230,7 +233,7 @@ export default function WBSModule() {
                     </div>
                 )}
 
-                {deliverables.map(deliverable => {
+                {(deliverables || []).map(deliverable => {
                     const linkedRootItems = items.filter(it => it.deliverable_id === deliverable.id && it.parent_id === null);
                     const isSelected = project?.selected_deliverable_id === deliverable.id;
 
@@ -255,7 +258,29 @@ export default function WBSModule() {
                                     </div>
                                     <div>
                                         <h3 className="text-xs font-bold text-slate-900">{deliverable.title}</h3>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Parent Deliverable</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Deliverable</p>
+                                            {(() => {
+                                                const getRootProduct = (delId: string): string | null => {
+                                                    const del = deliverables.find(d => d.id === delId);
+                                                    if (!del) return null;
+                                                    if (!del.parent_id) return del.title;
+                                                    return getRootProduct(del.parent_id);
+                                                };
+                                                const productName = getRootProduct(deliverable.id);
+                                                return productName && productName !== deliverable.title ? (
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="text-slate-200">/</span>
+                                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-tighter bg-blue-50 px-1 rounded">Aligns to: {productName}</span>
+                                                    </span>
+                                                ) : productName === deliverable.title ? (
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="text-slate-200">/</span>
+                                                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter bg-slate-100 px-1 rounded">Primary Product</span>
+                                                    </span>
+                                                ) : null;
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
                                 <button

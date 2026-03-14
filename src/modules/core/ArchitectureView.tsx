@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { Box, Layers, Wallet, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function ArchitectureView() {
-    const { items, deliverables, generateWBSFromPBS } = useProjectStore();
+    const { project, items, deliverables, generateWBSFromPBS } = useProjectStore();
     const [activeTab, setActiveTab] = useState<'PBS' | 'WBS' | 'CBS'>('PBS');
 
     const showSuggestion = deliverables.length > 0 && items.length <= 1; // 1 is the default scaffolding workstream
@@ -20,7 +20,12 @@ export default function ArchitectureView() {
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
                         Project Architecture
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-500 text-[10px] font-extrabold uppercase tracking-widest rounded border border-blue-100">Structured</span>
+                        <span className={cn(
+                            "px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest rounded border",
+                            project?.mode === 'STRUCTURED' ? "bg-blue-50 text-blue-500 border-blue-100" : "bg-slate-100 text-slate-500 border-slate-200"
+                        )}>
+                            {project?.mode || 'Structured'}
+                        </span>
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">Design the structural integrity of your delivery model.</p>
                 </div>

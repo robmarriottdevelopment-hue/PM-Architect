@@ -14,9 +14,9 @@ export default function StructuralAssistant() {
         if (!project) return list;
 
         // 1. Dependency Gap (Orphans)
-        const orphans = items.filter(item =>
-            !item.is_summary &&
-            !dependencies.some(d => d.predecessor_id === item.id || d.successor_id === item.id)
+        const orphans = (items || []).filter(item =>
+            item && !item.is_summary &&
+            !(dependencies || []).some(d => d && (d.predecessor_id === item.id || d.successor_id === item.id))
         );
         if (orphans.length > 0) {
             list.push({

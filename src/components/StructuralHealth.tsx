@@ -11,7 +11,12 @@ interface StructuralHealthProps {
 }
 
 export default function StructuralHealth({ items, dependencies }: StructuralHealthProps) {
-    if (items.length === 0) return null;
+    if (!items || items.length === 0) return null;
+
+    // Calculate project totals for normalization
+    const safeItems = items || [];
+    const totalDuration = safeItems.reduce((sum, item) => sum + (item.is_summary ? 0 : (item.duration || 1)), 0) || 1;
+    const totalCost = safeItems.reduce((sum, item) => sum + (item.cost_estimate || 0), 0) || 1;
 
     const total = items.length;
     const itemsWithParents = items.filter(it => it.parent_id !== null).length;

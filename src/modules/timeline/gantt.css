@@ -105,12 +105,15 @@
 }
 
 /* Critical Path - Soft Highlights */
-.bar-critical .bar {
+/* Critical Path - Soft Highlights */
+.bar-critical .bar,
+[class*="-critical"] .bar {
   stroke: #ef4444 !important;
   stroke-width: 2px !important;
 }
 
-.bar-critical .bar-label {
+.bar-critical .bar-label,
+[class*="-critical"] .bar-label {
   fill: #ef4444 !important;
   font-weight: 700 !important;
 }
@@ -149,6 +152,49 @@
   stroke-width: 2.5px !important;
   opacity: 1 !important;
   stroke-dasharray: 0 !important;
+}
+
+/* Custom styles for Product Coloring */
+.product-blue .bar { fill: #93c5fd; stroke: #3b82f6; }
+.product-blue .bar-progress { fill: #3b82f6; }
+
+.product-indigo .bar { fill: #c7d2fe; stroke: #6366f1; }
+.product-indigo .bar-progress { fill: #6366f1; }
+
+.product-violet .bar { fill: #ddd6fe; stroke: #8b5cf6; }
+.product-violet .bar-progress { fill: #8b5cf6; }
+
+.product-fuchsia .bar { fill: #f5d0fe; stroke: #d946ef; }
+.product-fuchsia .bar-progress { fill: #d946ef; }
+
+.product-rose .bar { fill: #fecdd3; stroke: #f43f5e; }
+.product-rose .bar-progress { fill: #f43f5e; }
+
+.product-amber .bar { fill: #fde68a; stroke: #f59e0b; }
+.product-amber .bar-progress { fill: #f59e0b; }
+
+.product-slate .bar { fill: #e2e8f0; stroke: #64748b; }
+.product-slate .bar-progress { fill: #64748b; }
+
+/* Product Summary Highlights */
+.product-header .bar {
+    fill: #0f172a !important; /* slate-900 */
+    stroke: #0f172a !important;
+}
+.product-header .bar-label {
+    fill: #0f172a !important;
+    font-weight: 800 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.deliverable-header .bar {
+    fill: #475569 !important; /* slate-600 */
+    stroke: #475569 !important;
+}
+.deliverable-header .bar-label {
+    fill: #475569 !important;
+    font-weight: 700 !important;
 }
 
 /* Custom styles for Structured Mode colors */
