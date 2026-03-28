@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Project, WorkItem, Dependency, ProjectMode, Risk, Change, Deliverable } from '@/modules/core/types';
 import { LIGHTWEIGHT_DEMO, STRUCTURED_DEMO } from '@/lib/demo/data';
 import { SchedulingEngine } from './engine';
+import { supabase } from '@/lib/supabase';
 
 interface ProjectState {
     project: Project | null;
@@ -11,6 +12,8 @@ interface ProjectState {
     changes: Change[];
     deliverables: Deliverable[];
     isDemoMode: boolean;
+    projects: Project[];
+    isLoading: boolean;
 
     // Actions
     initProject: (mode: ProjectMode, onboardScore?: number) => void;
@@ -35,6 +38,12 @@ interface ProjectState {
     moveDeliverable: (id: string, newParentId: string | null) => void;
     generateWBSFromPBS: () => void;
     upgradeToStructured: () => void;
+    
+    // SaaS Actions
+    fetchProjects: () => Promise<void>;
+    selectProject: (id: string) => Promise<void>;
+    saveProject: () => Promise<void>;
+    createProject: (name: string, mode: ProjectMode) => Promise<void>;
 }
 
 const safeUUID = () => {
@@ -52,6 +61,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
     changes: [],
     deliverables: [],
     isDemoMode: false,
+    projects: [],
+    isLoading: false,
 
     initProject: (mode, onboardScore) => {
         const projectId = safeUUID();
@@ -389,7 +400,134 @@ export const useProjectStore = create<ProjectState>((set) => ({
             deliverables: newDeliverables,
             items: updatedItems
         };
-    })
+    }),
+
+    fetchProjects: async () => {
+        set({ isLoading: true });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (!error && data) {
+            set({ projects: data as Project[] });
+        }
+        set({ isLoading: false });
+    },
+
+    selectProject: async (id) => {
+        set({ isLoading: true });
+        
+        // 1. Fetch Project
+        const { data: project, error: pError } = await supabase.from('projects').select('*').eq('id', id).single();
+        if (pError || !project) return;
+
+        // 2. Fetch Deliverables
+        const { data: deliverables } = await supabase.from('deliverables').select('*').eq('project_id', id);
+        
+        // 3. Fetch Work Items
+        const { data: items } = await supabase.from('work_items').select('*').eq('project_id', id).order('sort_order', { ascending: true });
+        
+        // 4. Fetch Dependencies
+        const { data: dependencies } = await supabase.from('dependencies').select('*').eq('project_id', id);
+        
+        // 5. Fetch Risks
+        const { data: risks } = await supabase.from('risks').select('*').eq('project_id', id);
+
+        // 6. Fetch Changes
+        const { data: changes } = await supabase.from('changes').select('*').eq('project_id', id);
+
+        set({
+            project: project as Project,
+            deliverables: deliverables || [],
+            items: items || [],
+            dependencies: dependencies || [],
+            risks: risks || [],
+            changes: changes || [],
+            isDemoMode: false,
+            isLoading: false
+        });
+    },
+
+    createProject: async (name, mode) => {
+        const { projects } = useProjectStore.getState();
+        if (projects.length >= 2) {
+            console.error('Project limit reached');
+            return;
+        }
+
+        set({ isLoading: true });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: project, error } = await supabase.from('projects').insert({
+            user_id: user.id,
+            name,
+            mode,
+            active_view: mode === 'STRUCTURED' ? 'ARCHITECTURE' : 'SCHEDULE',
+        }).select().single();
+
+        if (error) {
+            console.error('Error creating project:', error);
+            set({ isLoading: false });
+            return;
+        }
+
+        // Initialize with default state if needed
+        set((state) => ({
+            project: project as Project,
+            items: [],
+            deliverables: [],
+            dependencies: [],
+            risks: [],
+            changes: [],
+            projects: [project as Project, ...state.projects],
+            isLoading: false
+        }));
+    },
+
+    saveProject: async () => {
+        const { project, items, deliverables, dependencies, risks, changes } = useProjectStore.getState();
+        if (!project || project.id.includes('demo')) return;
+
+        set({ isLoading: true });
+
+        // Batch upsert everything
+        const p1 = supabase.from('projects').update({
+            name: project.name,
+            active_view: project.active_view,
+            show_driving_sequence: project.show_driving_sequence,
+            selected_deliverable_id: project.selected_deliverable_id
+        }).eq('id', project.id);
+
+        // Delete old relations and insert new ones (Simplest sync for now)
+        const p2 = supabase.from('deliverables').delete().eq('project_id', project.id).then(() => 
+            deliverables.length > 0 ? supabase.from('deliverables').insert(deliverables) : null
+        );
+        
+        const p3 = supabase.from('work_items').delete().eq('project_id', project.id).then(() => 
+            items.length > 0 ? supabase.from('work_items').insert(items) : null
+        );
+
+        const p4 = supabase.from('dependencies').delete().eq('project_id', project.id).then(() => 
+            dependencies.length > 0 ? supabase.from('dependencies').insert(dependencies) : null
+        );
+
+        const p5 = supabase.from('risks').delete().eq('project_id', project.id).then(() => 
+            risks.length > 0 ? supabase.from('risks').insert(risks) : null
+        );
+
+        const p6 = supabase.from('changes').delete().eq('project_id', project.id).then(() => 
+            changes.length > 0 ? supabase.from('changes').insert(changes) : null
+        );
+
+        await Promise.all([p1, p2, p3, p4, p5, p6]);
+        set({ isLoading: false });
+    }
 }));
 
 // --- Pure Helper Functions (outside store for reuse) ---

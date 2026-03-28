@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Onboarding from '@/components/Onboarding';
+import Dashboard from '@/components/Dashboard';
 import { useProjectStore } from '@/modules/core/store';
 import { ProjectMode, WorkItem } from '@/modules/core/types';
-import { Layout, Plus, Play, Database, Info, Settings, Activity, Layers, X, ChevronRight, FileText } from 'lucide-react';
+import { Layout, Plus, Play, Database, Info, Settings, Activity, Layers, X, ChevronRight, FileText, LogOut, Loader2, Save, Cloud } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import StructuralAssistant from '@/modules/intelligence/StructuralAssistant';
@@ -13,14 +14,20 @@ import StructuralHealth from '@/components/StructuralHealth';
 import ChangeControlModule from '@/modules/change/ChangeControlModule';
 import StatusReportModal from '@/components/StatusReportModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { useAuth } from '@/components/AuthContext';
+import { useRouter } from 'next/navigation';
 
 // Dynamically import Gantt to avoid SSR issues
 const GanttCanvas = dynamic(() => import('@/modules/timeline/GanttCanvas'), { ssr: false });
 const ArchitectureView = dynamic(() => import('@/modules/core/ArchitectureView'), { ssr: false });
 
 export default function Home() {
+  const { user, loading: authLoading, signOut } = useAuth();
+  const router = useRouter();
+
   const {
-    project, initProject, loadDemo, isDemoMode, items, deliverables, dependencies, risks, changes,
+    project, projects, isLoading, fetchProjects, selectProject, createProject, saveProject,
+    initProject, loadDemo, isDemoMode, items, deliverables, dependencies, risks, changes,
     addWorkItem, updateWorkItem, updateProject, addDependency, deleteDependency
   } = useProjectStore();
 
@@ -30,8 +37,17 @@ export default function Home() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [deletionAlert, setDeletionAlert] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
 
   const selectedTask = (items || []).find(it => it.id === selectedTaskId);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    } else if (user) {
+      fetchProjects();
+    }
+  }, [user, authLoading, router, fetchProjects]);
 
   useEffect(() => {
     if (project?.mode === 'STRUCTURED') {
@@ -39,11 +55,14 @@ export default function Home() {
     }
   }, [project?.mode]);
 
-  const handleStart = (mode: ProjectMode, score?: number, isDemo?: boolean) => {
+  const handleStart = async (mode: ProjectMode, score?: number, isDemo?: boolean) => {
     if (isDemo) {
       loadDemo(mode);
+      setIsCreatingNew(false);
     } else {
-      initProject(mode, score);
+      // In SaaS mode, we use createProject instead of local initProject
+      await createProject('New Project Workspace', mode);
+      setIsCreatingNew(false);
     }
   };
 
@@ -69,8 +88,49 @@ export default function Home() {
     });
   };
 
-  if (!project) {
-    return <Onboarding onSelect={handleStart} />;
+  if (authLoading || (isLoading && !project && projects.length === 0)) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-white">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-900" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  // Show Dashboard if no project is active and we're not in the middle of creating one
+  if (!project && !isCreatingNew) {
+    return (
+      <div className="relative">
+         <div className="absolute top-6 right-12 z-50">
+          <button 
+            onClick={() => signOut()}
+            className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100"
+          >
+            <LogOut className="w-4 h-4" /> 
+            Sign Out
+          </button>
+        </div>
+        <Dashboard onNewProject={() => setIsCreatingNew(true)} />
+      </div>
+    );
+  }
+
+  // Show Onboarding if user clicked "New Project"
+  if (!project && isCreatingNew) {
+    return (
+      <div className="relative h-screen">
+        <div className="absolute top-6 left-6 z-50">
+          <button 
+            onClick={() => setIsCreatingNew(false)}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-900 transition-colors"
+          >
+             <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
+          </button>
+        </div>
+        <Onboarding onSelect={handleStart} />
+      </div>
+    );
   }
 
   return (
@@ -78,14 +138,17 @@ export default function Home() {
       {/* Top Navigation */}
       <header className="h-16 border-b border-slate-100 px-6 flex items-center justify-between shrink-0 z-50 bg-white">
         <div className="flex items-center gap-4">
-          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+          <button 
+            onClick={() => useProjectStore.setState({ project: null })}
+            className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center hover:scale-105 transition-transform"
+          >
             <Layout className="text-white w-5 h-5" />
-          </div>
+          </button>
           <div>
-            <h1 className="text-sm font-bold tracking-tight">{project.name}</h1>
+            <h1 className="text-sm font-bold tracking-tight">{project!.name}</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                {project.mode}
+                {project!.mode}
               </span>
               {isDemoMode && (
                 <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded border border-amber-100">
@@ -96,13 +159,13 @@ export default function Home() {
           </div>
 
           {/* View Selector (Structured Only) */}
-          {project.mode === 'STRUCTURED' && (
+          {project!.mode === 'STRUCTURED' && (
             <div className="ml-8 flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
                 onClick={() => updateProject({ active_view: 'ARCHITECTURE' })}
                 className={cn(
                   "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  project.active_view === 'ARCHITECTURE' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  project!.active_view === 'ARCHITECTURE' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 )}
               >
                 Architecture
@@ -111,7 +174,7 @@ export default function Home() {
                 onClick={() => updateProject({ active_view: 'SCHEDULE' })}
                 className={cn(
                   "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  project.active_view === 'SCHEDULE' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                  project!.active_view === 'SCHEDULE' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 )}
               >
                 Schedule
@@ -121,26 +184,47 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Sync Button */}
+          {!isDemoMode && (
+             <button
+              onClick={saveProject}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200 disabled:opacity-50"
+             >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+              {isLoading ? 'Syncing...' : 'Save to Cloud'}
+            </button>
+          )}
+
           {!isDemoMode && (items || []).length === 0 && (
             <div className="flex gap-2 mr-4">
               <button
-                onClick={() => loadDemo(project.mode)}
+                onClick={() => loadDemo(project!.mode)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-md transition-colors border border-slate-200"
               >
-                <Play className="w-3 h-3 text-blue-500" /> Load {project.mode === 'STRUCTURED' ? 'Case Study' : 'Demo'}
+                <Play className="w-3 h-3 text-blue-500" /> Load {project!.mode === 'STRUCTURED' ? 'Case Study' : 'Demo'}
               </button>
             </div>
           )}
 
-          {project.mode === 'STRUCTURED' && (
-            <div className="mr-4 border-l border-slate-100 pl-4">
+          {project!.mode === 'STRUCTURED' && (
+            <div className="mr-2 ml-2 border-l border-slate-100 pl-4">
               <StructuralHealth items={items} dependencies={dependencies} />
             </div>
           )}
 
-          <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors">
-            <Settings className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 mr-2 border-r border-slate-100 pr-4 ml-2">
+             <button 
+              onClick={() => signOut()}
+              className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-rose-500 transition-colors"
+              title="Sign Out"
+             >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors">
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
           
           <ErrorBoundary name="Report Engine">
             <StatusReportModalTrigger onOpen={() => setShowReport(true)} />
@@ -192,7 +276,7 @@ export default function Home() {
         <div
           className={cn(
             "h-full border-r border-slate-100 bg-white transition-all duration-300 ease-in-out overflow-hidden shrink-0",
-            (project.mode === 'STRUCTURED' && showWBS) ? "w-80 opacity-100" : "w-0 opacity-0"
+            (project!.mode === 'STRUCTURED' && showWBS) ? "w-80 opacity-100" : "w-0 opacity-0"
           )}
         >
           <div className="w-80 h-full flex flex-col p-6">
@@ -284,7 +368,7 @@ export default function Home() {
         {/* Workspace Area */}
         <section className="flex-1 flex flex-col min-w-0 bg-slate-50/30 overflow-hidden">
           <ErrorBoundary name="Main Workspace">
-            {project.mode === 'STRUCTURED' && project.active_view === 'ARCHITECTURE' ? (
+            {project!.mode === 'STRUCTURED' && project!.active_view === 'ARCHITECTURE' ? (
               <ArchitectureView />
             ) : (
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -292,16 +376,16 @@ export default function Home() {
                 <div className="px-12 py-8 shrink-0 flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-                      {project.active_view === 'SCHEDULE' ? 'Project Schedule' : 'Timeline'}
+                      {project!.active_view === 'SCHEDULE' ? 'Project Schedule' : 'Timeline'}
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">
-                      {project.mode === 'STRUCTURED'
+                      {project!.mode === 'STRUCTURED'
                         ? "Manage the driving sequence and execution logic."
                         : "Visualize your progress and dependencies."}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {project.mode === 'LIGHTWEIGHT' && (
+                    {project!.mode === 'LIGHTWEIGHT' && (
                       <button
                         onClick={handleConvertToStructured}
                         className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md active:scale-95 flex items-center gap-2"
@@ -312,24 +396,24 @@ export default function Home() {
                     <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                       <div className={cn(
                         "w-2 h-2 rounded-full animate-pulse",
-                        project.show_driving_sequence ? "bg-red-500" : "bg-slate-300"
+                        project!.show_driving_sequence ? "bg-red-500" : "bg-slate-300"
                       )} />
                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        {project.show_driving_sequence ? "Critical Path Active" : "Schedule Analysis Ready"}
+                        {project!.show_driving_sequence ? "Critical Path Active" : "Schedule Analysis Ready"}
                       </span>
                     </div>
 
                     <button
-                      onClick={() => updateProject({ show_driving_sequence: !project.show_driving_sequence })}
+                      onClick={() => updateProject({ show_driving_sequence: !project!.show_driving_sequence })}
                       className={cn(
                         "flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-bold transition-all shadow-lg",
-                        project.show_driving_sequence
+                        project!.show_driving_sequence
                           ? "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100"
                           : "bg-slate-900 text-white hover:bg-slate-800"
                       )}
                     >
                       <Activity className="w-4 h-4" />
-                      {project.show_driving_sequence ? 'Critical Path Active' : 'Analyze Driving Sequence'}
+                      {project!.show_driving_sequence ? 'Critical Path Active' : 'Analyze Driving Sequence'}
                     </button>
                   </div>
                 </div>
@@ -343,9 +427,9 @@ export default function Home() {
                       onTaskClick={(task: any) => setSelectedTaskId(task.id)}
                       onAddDependency={addDependency}
                       onDeleteDependency={deleteDependency}
-                      showDrivingSequence={project.show_driving_sequence}
+                      showDrivingSequence={project!.show_driving_sequence}
                       deliverables={deliverables || []}
-                      mode={project.mode}
+                      mode={project!.mode}
                     />
                   </ErrorBoundary>
                 </div>
