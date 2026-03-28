@@ -71,6 +71,7 @@ export interface Change {
 
 export interface Dependency {
   id: string;
+  project_id: string;
   predecessor_id: string;
   successor_id: string;
   type: DependencyType;

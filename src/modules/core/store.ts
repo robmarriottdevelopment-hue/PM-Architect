@@ -261,6 +261,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
             ...state.dependencies,
             {
                 id: safeUUID(),
+                project_id: state.project?.id || '',
                 predecessor_id: preId,
                 successor_id: sucId,
                 type: 'FS' as const
@@ -496,37 +497,48 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
         set({ isLoading: true });
 
-        // Batch upsert everything
-        const p1 = supabase.from('projects').update({
-            name: project.name,
-            active_view: project.active_view,
-            show_driving_sequence: project.show_driving_sequence,
-            selected_deliverable_id: project.selected_deliverable_id
-        }).eq('id', project.id);
+        try {
+            // 1. Update Project Metadata
+            const { error: pErr } = await supabase.from('projects').update({
+                name: project.name,
+                active_view: project.active_view,
+                show_driving_sequence: project.show_driving_sequence,
+                selected_deliverable_id: project.selected_deliverable_id
+            }).eq('id', project.id);
+            if (pErr) throw pErr;
 
-        // Delete old relations and insert new ones (Simplest sync for now)
-        const p2 = supabase.from('deliverables').delete().eq('project_id', project.id).then(() => 
-            deliverables.length > 0 ? supabase.from('deliverables').insert(deliverables) : null
-        );
-        
-        const p3 = supabase.from('work_items').delete().eq('project_id', project.id).then(() => 
-            items.length > 0 ? supabase.from('work_items').insert(items) : null
-        );
+            // 2. Sync Collections
+            // Clean objects to match database schemas exactly (removing transient scheduling fields)
+            const cleanItems = items.map(({ late_start, late_finish, total_float, is_critical, ...rest }) => rest);
+            
+            const syncs = [
+                { table: 'deliverables', data: deliverables },
+                { table: 'work_items', data: cleanItems },
+                { table: 'dependencies', data: dependencies },
+                { table: 'risks', data: risks },
+                { table: 'changes', data: changes },
+            ];
 
-        const p4 = supabase.from('dependencies').delete().eq('project_id', project.id).then(() => 
-            dependencies.length > 0 ? supabase.from('dependencies').insert(dependencies) : null
-        );
+            for (const { table, data } of syncs) {
+                // Delete old and insert new
+                const { error: delErr } = await supabase.from(table).delete().eq('project_id', project.id);
+                if (delErr) console.error(`Error clearing ${table}:`, delErr);
 
-        const p5 = supabase.from('risks').delete().eq('project_id', project.id).then(() => 
-            risks.length > 0 ? supabase.from('risks').insert(risks) : null
-        );
-
-        const p6 = supabase.from('changes').delete().eq('project_id', project.id).then(() => 
-            changes.length > 0 ? supabase.from('changes').insert(changes) : null
-        );
-
-        await Promise.all([p1, p2, p3, p4, p5, p6]);
-        set({ isLoading: false });
+                if (data.length > 0) {
+                    const { error: insErr } = await supabase.from(table).insert(data);
+                    if (insErr) {
+                        console.error(`Error inserting into ${table}:`, insErr);
+                        throw insErr;
+                    }
+                }
+            }
+            
+            console.log('Project saved successfully');
+        } catch (err) {
+            console.error('Critical sync failure:', err);
+        } finally {
+            set({ isLoading: false });
+        }
     }
 }));
 
