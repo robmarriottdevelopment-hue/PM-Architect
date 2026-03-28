@@ -52,8 +52,8 @@ export const LIGHTWEIGHT_DEMO: { project: Project; items: WorkItem[]; dependenci
         },
     ],
     dependencies: [
-        { id: 'dep-1', predecessor_id: 'lw-1', successor_id: 'lw-2', type: 'FS' },
-        { id: 'dep-2', predecessor_id: 'lw-2', successor_id: 'lw-3', type: 'FS' },
+        { id: 'dep-1', project_id: 'demo-lightweight', predecessor_id: 'lw-1', successor_id: 'lw-2', type: 'FS' },
+        { id: 'dep-2', project_id: 'demo-lightweight', predecessor_id: 'lw-2', successor_id: 'lw-3', type: 'FS' },
     ],
 };
 
@@ -162,11 +162,11 @@ export const STRUCTURED_DEMO: {
         },
     ],
     dependencies: [
-        { id: 'dep-3', predecessor_id: 'item-af-2', successor_id: 'item-cert-1', type: 'FS' },
-        { id: 'dep-4', predecessor_id: 'item-av-2', successor_id: 'item-cert-1', type: 'FS' },
-        { id: 'dep-5', predecessor_id: 'item-cert-1', successor_id: 'item-cert-2', type: 'FS' },
-        { id: 'dep-6', predecessor_id: 'item-af-1', successor_id: 'item-af-2', type: 'FS' },
-        { id: 'dep-7', predecessor_id: 'item-av-1', successor_id: 'item-av-2', type: 'FS' },
+        { id: 'dep-3', project_id: 'demo-structured', predecessor_id: 'item-af-2', successor_id: 'item-cert-1', type: 'FS' },
+        { id: 'dep-4', project_id: 'demo-structured', predecessor_id: 'item-av-2', successor_id: 'item-cert-1', type: 'FS' },
+        { id: 'dep-5', project_id: 'demo-structured', predecessor_id: 'item-cert-1', successor_id: 'item-cert-2', type: 'FS' },
+        { id: 'dep-6', project_id: 'demo-structured', predecessor_id: 'item-af-1', successor_id: 'item-af-2', type: 'FS' },
+        { id: 'dep-7', project_id: 'demo-structured', predecessor_id: 'item-av-1', successor_id: 'item-av-2', type: 'FS' },
     ],
     risks: [
         {
